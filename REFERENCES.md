@@ -106,6 +106,68 @@ currently under revision, the first update in more than a decade.
 
 ---
 
+## 3b. Why opposition coheres faster than support — grounding `solidarityReward > supportReward`
+
+The model sets the solidarity reward `R` inside an opposition group above the reward `S` for agreeing with
+a supporting neighbour. This asymmetry drives the tipping point, so it needs a basis beyond intuition.
+Three independent literatures converge on it.
+
+### Olson, M. (1965). *The Logic of Collective Action: Public Goods and the Theory of Groups.* Harvard University Press, Harvard Economic Studies vol. 124.
+
+The structural argument, and the strongest one here. Collective action is easier for a **small group
+facing concentrated costs** than for a large group enjoying diffuse benefits, because the large group
+free-rides. Infrastructure projects have exactly this shape: the costs of land acquisition and
+resettlement fall on a bounded set of affected households, while the benefits spread across a whole
+region.
+
+**Why it matters here:** it predicts `R > S` from the incentive structure of the project itself, with no
+psychological assumption required. Households bearing a concentrated loss organise; households enjoying a
+diffuse gain do not.
+
+### Baumeister, R. F., Bratslavsky, E., Finkenauer, C., & Vohs, K. D. (2001). *Bad Is Stronger Than Good.* Review of General Psychology, 5(4), 323-370. DOI 10.1037/1089-2680.5.4.323
+
+### Rozin, P., & Royzman, E. B. (2001). *Negativity Bias, Negativity Dominance, and Contagion.* Personality and Social Psychology Review, 5(4), 296-320. DOI 10.1207/S15327957PSPR0504_2
+
+Two companion reviews, published the same year, establishing **negativity bias**: negative events, sources
+and information carry more weight than equivalent positive ones, across a wide range of domains. Rozin &
+Royzman add the property most relevant to a lattice model, **negativity dominance**: when positive and
+negative elements combine, the result is more negative than the sum of its parts.
+
+**Why it matters here:** negativity dominance is the household-level counterpart of `R > S`, and it
+justifies why a single opposed neighbour weighs more than a single supporting one.
+
+### Kahneman, D., & Tversky, A. (1979). *Prospect Theory: An Analysis of Decision under Risk.* Econometrica, 47(2), 263-291.
+
+Losses loom larger than equivalent gains, and outcomes are evaluated against a reference point rather than
+in absolute terms.
+
+**Why it matters here:** affected households face a **certain loss** (land, dwelling, social network)
+against an **uncertain gain** (compensation, livelihood restoration, regional development). Loss aversion
+predicts that the certain loss dominates the decision, which sustains opposition even where compensation
+is objectively adequate.
+
+---
+
+## 3c. Practitioner-sourced parameters
+
+Two modelling choices come from field practice rather than from published literature, and are recorded as
+such rather than dressed up with a citation.
+
+**Indecision carries a cost (`indecisionCost`).** An undeclared household delays the project, and delay is
+the most expensive outcome of all. A resettlement action plan exists to identify opposition early enough
+to act on it; a household that has not declared itself can be neither convinced nor compensated. Undecided
+is therefore modelled as costly in every direction, including between two undecided households.
+
+**One generation represents about one month.** The imitation rule requires that households can observe how
+their neighbours are faring. In resettlement contexts this is concrete rather than abstract: compensation
+outcomes become physically visible as housing repairs, new clothing, children returning to school. Those
+signals take weeks to months to appear, which sets the timescale of a single update step.
+
+Both are drawn from field experience on infrastructure projects in Africa and the Middle East. They are
+falsifiable claims about the model's domain, offered as such.
+
+---
+
 ## 4. The gap this project addresses
 
 ### *Incorporating Social Acceptance into Sustainable Power System Planning: A Systematic Analysis of Modelling Approaches and Empirical Outcomes.* Sustainability, MDPI. `[OA]`
