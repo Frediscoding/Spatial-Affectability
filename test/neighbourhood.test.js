@@ -93,31 +93,43 @@ test('a cell outside the grid, or a malformed grid, is rejected', () => {
 
 // --- computeCellPayoff: summation --------------------------------------
 
-test('a supporter among supporters collects one reward per neighbour', () => {
+test('a supporter among supporters scores the reward itself, not eight times it', () => {
   const grid = makeGrid(3, 3);
   // Interior cell: 8 neighbours, all supporters, no opposition so no isolation.
-  assert.equal(computeCellPayoff(grid, 1, 1, params), 8 * params.supportReward);
+  // The payoff is the mean, so it does not grow with the size of the neighbourhood.
+  assert.equal(computeCellPayoff(grid, 1, 1, params), params.supportReward);
 });
 
-test('an opposed household among opponents collects the solidarity reward', () => {
+test('an opposed household among opponents scores the solidarity reward', () => {
   const grid = makeGrid(3, 3, OPPOSED);
-  assert.equal(computeCellPayoff(grid, 1, 1, params), 8 * params.solidarityReward);
+  assert.equal(computeCellPayoff(grid, 1, 1, params), params.solidarityReward);
 });
 
-test('a corner cell scores over 3 neighbours, not 8', () => {
+test('a corner cell averages over 3 neighbours and lands on the same scale as an interior one', () => {
   const grid = makeGrid(3, 3);
-  assert.equal(computeCellPayoff(grid, 0, 0, params), 3 * params.supportReward);
+  assert.equal(computeCellPayoff(grid, 0, 0, params), params.supportReward);
+  assert.equal(
+    computeCellPayoff(grid, 0, 0, params),
+    computeCellPayoff(grid, 1, 1, params),
+    'a uniform grid must score the same everywhere, edges included',
+  );
 });
 
-test('the total matches the sum of the pairwise payoffs, computed independently', () => {
+test('a lone cell with no neighbours has no social payoff at all', () => {
+  assert.equal(computeCellPayoff([[SUPPORTER]], 0, 0, params), 0);
+});
+
+test('the payoff matches the mean of the pairwise payoffs, computed independently', () => {
   const grid = makeGrid(3, 3, UNDECIDED, [
     [1, 1, OPPOSED],
     [0, 0, OPPOSED],
     [2, 1, SUPPORTER],
   ]);
-  const expected = getNeighbours(grid, 1, 1)
-    .map((neighbour) => computeNeighbourPayoff(OPPOSED, neighbour, params))
-    .reduce((a, b) => a + b, 0);
+  const neighbours = getNeighbours(grid, 1, 1);
+  const expected =
+    neighbours
+      .map((neighbour) => computeNeighbourPayoff(OPPOSED, neighbour, params))
+      .reduce((a, b) => a + b, 0) / neighbours.length;
   assert.equal(computeCellPayoff(grid, 1, 1, params), expected);
 });
 
@@ -126,10 +138,10 @@ test('the total matches the sum of the pairwise payoffs, computed independently'
 test('an isolated supporter is penalised beyond the plain sum of conflicts', () => {
   // Centre supporter, all 8 neighbours opposed: share = 1.0, above threshold.
   const grid = makeGrid(3, 3, OPPOSED, [[1, 1, SUPPORTER]]);
-  const plainSum = 8 * -params.conflictCost;
+  const plainMean = -params.conflictCost;
   const payoff = computeCellPayoff(grid, 1, 1, params);
-  assert.ok(payoff < plainSum, 'isolation must make things worse, not merely additive');
-  assert.equal(payoff, plainSum * params.isolationPenalty);
+  assert.ok(payoff < plainMean, 'isolation must make things worse, not merely additive');
+  assert.equal(payoff, plainMean * params.isolationPenalty);
 });
 
 test('a supporter below the threshold is not penalised', () => {
@@ -139,21 +151,21 @@ test('a supporter below the threshold is not penalised', () => {
     [1, 0, OPPOSED],
     [2, 0, OPPOSED],
   ]);
-  const expected = 3 * -params.conflictCost + 5 * params.supportReward;
+  const expected = (3 * -params.conflictCost + 5 * params.supportReward) / 8;
   assert.equal(computeCellPayoff(grid, 1, 1, params), expected);
 });
 
 test('an isolated opponent is NOT penalised: the effect is asymmetric by design', () => {
   const grid = makeGrid(3, 3, SUPPORTER, [[1, 1, OPPOSED]]);
-  assert.equal(computeCellPayoff(grid, 1, 1, params), 8 * -params.conflictCost);
+  assert.equal(computeCellPayoff(grid, 1, 1, params), -params.conflictCost);
 });
 
 test('the isolation threshold is proportional, so it still triggers in a corner', () => {
   // Corner supporter with all 3 of its neighbours opposed: share = 1.0.
   // An absolute threshold of 5 opposed neighbours could never fire here.
   const grid = makeGrid(4, 4, OPPOSED, [[0, 0, SUPPORTER]]);
-  const plainSum = 3 * -params.conflictCost;
-  assert.equal(computeCellPayoff(grid, 0, 0, params), plainSum * params.isolationPenalty);
+  const plainMean = -params.conflictCost;
+  assert.equal(computeCellPayoff(grid, 0, 0, params), plainMean * params.isolationPenalty);
 });
 
 test('isolation amplifies the conflict cost only, never the remaining rewards', () => {
@@ -167,7 +179,7 @@ test('isolation amplifies the conflict cost only, never the remaining rewards', 
   const conflicts = 6 * -params.conflictCost;
   assert.equal(
     computeCellPayoff(grid, 1, 1, params),
-    rewards + conflicts * params.isolationPenalty,
+    (rewards + conflicts * params.isolationPenalty) / 8,
   );
 });
 
@@ -183,14 +195,14 @@ test('undecided neighbours count towards the neighbourhood but not towards isola
   const conflicts = 5 * -params.conflictCost;
   assert.equal(
     computeCellPayoff(grid, 1, 1, params),
-    undecided + conflicts * params.isolationPenalty,
+    (undecided + conflicts * params.isolationPenalty) / 8,
   );
 });
 
 test('an isolation penalty of 1 leaves the payoff untouched', () => {
   const grid = makeGrid(3, 3, OPPOSED, [[1, 1, SUPPORTER]]);
   const neutral = { ...params, isolationPenalty: 1 };
-  assert.equal(computeCellPayoff(grid, 1, 1, neutral), 8 * -params.conflictCost);
+  assert.equal(computeCellPayoff(grid, 1, 1, neutral), -params.conflictCost);
 });
 
 test('computeCellPayoff rejects params that lack the isolation settings', () => {

@@ -41,6 +41,8 @@ export const DEFAULT_PARAMS = {
   grievanceResolutionRate: 0.5, // share of grievances resolved within the committed time
   rumorPropagation: 0.3, // speed at which unverified information spreads
 
+  projectWeight: 4, // how far project management can outweigh neighbourhood pressure
+  decisionRate: 1 / 6, // probability an undecided household resolves in a given month
   noise: 0.02, // probability a household picks a position for reasons the model does not see
 };
 
@@ -221,10 +223,19 @@ export function getNeighbours(grid, x, y) {
 }
 
 /**
- * Total payoff a household draws from its neighbourhood.
+ * Average payoff a household draws from its neighbourhood.
  *
- * This is the sum of its pairwise payoffs, plus one neighbourhood-level effect
- * the pairwise matrix cannot express.
+ * This is the **mean** of its pairwise payoffs, not their sum, plus one
+ * neighbourhood-level effect the pairwise matrix cannot express.
+ *
+ * Averaging matters for two reasons. It keeps the social term on the same scale
+ * as the project term, so that the levers a project manager controls can
+ * actually compete with neighbourhood pressure; summing over eight neighbours
+ * made the social term roughly ten times larger, and no slider setting could
+ * ever overcome it. It also gives boundary cells the behaviour the model is
+ * built to show: with a sum, a corner cell simply scores lower than an interior
+ * one, which is an artefact. With a mean, it scores on the same scale but over
+ * three neighbours instead of eight, so it is genuinely more volatile.
  *
  * **Isolation of a lone supporter.** A supporter surrounded by opponents bears
  * more social pressure than an opponent surrounded by supporters. This is a
@@ -249,26 +260,30 @@ export function computeCellPayoff(grid, x, y, params = DEFAULT_PARAMS) {
   const neighbours = getNeighbours(grid, x, y);
   const self = grid[y][x];
 
+  if (neighbours.length === 0) {
+    return 0;
+  }
+
   let total = 0;
   for (const neighbour of neighbours) {
     total += computeNeighbourPayoff(self, neighbour, params);
   }
 
-  if (self !== SUPPORTER || neighbours.length === 0) {
-    return total;
+  if (self !== SUPPORTER) {
+    return total / neighbours.length;
   }
 
   const opposedCount = neighbours.filter((state) => state === OPPOSED).length;
   const opposedShare = opposedCount / neighbours.length;
   if (opposedShare < params.isolationThreshold) {
-    return total;
+    return total / neighbours.length;
   }
 
   // Amplify only the conflict component, not the rewards the supporter draws
   // from whatever allies are left. The component is negative, so adding a
   // positive multiple of it makes the payoff worse.
   const conflictComponent = 0 - params.conflictCost * opposedCount;
-  return total + (params.isolationPenalty - 1) * conflictComponent;
+  return (total + (params.isolationPenalty - 1) * conflictComponent) / neighbours.length;
 }
 
 /**
@@ -337,7 +352,10 @@ export function computeProjectPayoff(state, params = DEFAULT_PARAMS) {
  * @returns {number}
  */
 export function computeTotalPayoff(grid, x, y, params = DEFAULT_PARAMS) {
-  return computeCellPayoff(grid, x, y, params) + computeProjectPayoff(grid[y][x], params);
+  return (
+    computeCellPayoff(grid, x, y, params) +
+    params.projectWeight * computeProjectPayoff(grid[y][x], params)
+  );
 }
 
 /**
@@ -352,7 +370,14 @@ export function computeTotalPayoff(grid, x, y, params = DEFAULT_PARAMS) {
 export const PAYOFF_EPSILON = 1e-9;
 
 /** Every parameter the simulation needs to run a generation. */
-export const ALL_PARAMS = [...PAIRWISE_PARAMS, ...ISOLATION_PARAMS, ...PROJECT_PARAMS, 'noise'];
+export const ALL_PARAMS = [
+  ...PAIRWISE_PARAMS,
+  ...ISOLATION_PARAMS,
+  ...PROJECT_PARAMS,
+  'projectWeight',
+  'decisionRate',
+  'noise',
+];
 
 /**
  * Decides the next state of one household, given every payoff on the board.
@@ -460,6 +485,13 @@ export function stepGeneration(grid, params = DEFAULT_PARAMS, random = Math.rand
     row.map((_, x) => {
       if (params.noise > 0 && random() < params.noise) {
         return STATES[Math.floor(random() * STATES.length) % STATES.length];
+      }
+      // Making up one's mind takes time. An undecided household that has not
+      // yet resolved this month stays undecided, whatever its neighbours are
+      // doing. Without this, the imitation rule would resolve every undecided
+      // household in a single generation, and the state would be decorative.
+      if (grid[y][x] === UNDECIDED && random() >= params.decisionRate) {
+        return UNDECIDED;
       }
       return decideNextState(grid, payoffs, x, y);
     }),

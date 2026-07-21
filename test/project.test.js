@@ -22,6 +22,7 @@ const params = {
   engagementIntensity: 0.4,
   grievanceResolutionRate: 0.7,
   rumorPropagation: 0.2,
+  projectWeight: 3,
 };
 
 /**
@@ -133,7 +134,7 @@ test('an unknown state or a malformed parameter set is rejected', () => {
 
 // --- computeTotalPayoff: the sum ----------------------------------------
 
-test('the total is exactly the neighbourhood term plus the project term', () => {
+test('the total is the neighbourhood term plus the weighted project term', () => {
   const grid = [
     [SUPPORTER, OPPOSED, UNDECIDED],
     [OPPOSED, SUPPORTER, OPPOSED],
@@ -143,7 +144,8 @@ test('the total is exactly the neighbourhood term plus the project term', () => 
     for (let x = 0; x < 3; x += 1) {
       assert.equal(
         computeTotalPayoff(grid, x, y, params),
-        computeCellPayoff(grid, x, y, params) + computeProjectPayoff(grid[y][x], params),
+        computeCellPayoff(grid, x, y, params) +
+          params.projectWeight * computeProjectPayoff(grid[y][x], params),
         `cell (${x}, ${y})`,
       );
     }
@@ -154,6 +156,23 @@ test('the project term applies to every state, including on a corner cell', () =
   for (const state of STATES) {
     const grid = [[state]];
     // A one-cell grid has no neighbours, so the total is the project term alone.
-    assert.equal(computeTotalPayoff(grid, 0, 0, params), computeProjectPayoff(state, params));
+    assert.equal(
+      computeTotalPayoff(grid, 0, 0, params),
+      params.projectWeight * computeProjectPayoff(state, params),
+    );
   }
+});
+
+test('projectWeight scales how far management can outweigh neighbourhood pressure', () => {
+  // A lone supporter in a cohesive opposition, with the project run well.
+  const grid = [
+    [OPPOSED, OPPOSED, OPPOSED],
+    [OPPOSED, SUPPORTER, OPPOSED],
+    [OPPOSED, OPPOSED, OPPOSED],
+  ];
+  const wellRun = { ...params, compensationFairness: 1, engagementIntensity: 1, rumorPropagation: 0 };
+  const ignored = computeTotalPayoff(grid, 1, 1, { ...wellRun, projectWeight: 0 });
+  const decisive = computeTotalPayoff(grid, 1, 1, { ...wellRun, projectWeight: 10 });
+  assert.ok(ignored < 0, 'with no weight, the social term alone crushes the supporter');
+  assert.ok(decisive > 0, 'with enough weight, good management can hold a lone supporter');
 });
