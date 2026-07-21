@@ -1,0 +1,10 @@
+{
+  "name": "spatial-affectability",
+  "version": "0.1.0",
+  "description": "A spatial simulation for Stakeholder Engagement Plans",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
