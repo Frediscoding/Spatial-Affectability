@@ -34,6 +34,12 @@ export const DEFAULT_PARAMS = {
   // Isolation of a lone supporter. See computeCellPayoff.
   isolationThreshold: 0.6, // share of opposed neighbours above which pressure amplifies
   isolationPenalty: 1.8, // multiplier applied to the conflict cost once isolated
+
+  // How the project itself is being run. See computeProjectPayoff.
+  compensationFairness: 0.5, // perceived fairness and timeliness of compensation
+  engagementIntensity: 0.5, // frequency and quality of consultation and disclosure
+  grievanceResolutionRate: 0.5, // share of grievances resolved within the committed time
+  rumorPropagation: 0.3, // speed at which unverified information spreads
 };
 
 /**
@@ -84,6 +90,14 @@ export const PAIRWISE_PARAMS = [
 
 /** Additional parameters used once the whole neighbourhood is in view. */
 export const ISOLATION_PARAMS = ['isolationThreshold', 'isolationPenalty'];
+
+/** Parameters describing how the project itself is being run. */
+export const PROJECT_PARAMS = [
+  'compensationFairness',
+  'engagementIntensity',
+  'grievanceResolutionRate',
+  'rumorPropagation',
+];
 
 export const REQUIRED_PARAMS = PAIRWISE_PARAMS;
 
@@ -249,4 +263,73 @@ export function computeCellPayoff(grid, x, y, params = DEFAULT_PARAMS) {
   // positive multiple of it makes the payoff worse.
   const conflictComponent = 0 - params.conflictCost * opposedCount;
   return total + (params.isolationPenalty - 1) * conflictComponent;
+}
+
+/**
+ * Payoff a household draws from the project itself, independently of its
+ * neighbours.
+ *
+ * This is where the four levers a project manager actually controls enter the
+ * model. A supporter is rewarded by fair compensation and by being consulted,
+ * and undermined by rumour. An opponent is sustained by unresolved grievances
+ * and by rumour, and undermined by compensation that is seen to be fair.
+ *
+ *   supporter = compensationFairness + engagementIntensity - rumorPropagation
+ *   opposed   = grievanceBacklog     + rumorPropagation    - compensationFairness
+ *   undecided = -indecisionCost
+ *
+ * **Grievance backlog is derived, not accumulated.** `grievanceBacklog` is
+ * taken as `1 - grievanceResolutionRate`: the share of grievances left
+ * unresolved at the committed deadline. This keeps every generation a pure
+ * function of the current state, which is what makes the simulation
+ * reproducible and testable. Letting the backlog accumulate across generations
+ * would create the self-reinforcing spiral described in the project brief, but
+ * it would also give the model a memory, and reproducing a run would then
+ * require replaying its whole history. That refinement is deliberately deferred
+ * until the simulation runs end to end.
+ *
+ * The undecided household draws neither the benefits of compensation nor the
+ * cohesion of an organised group: it is not compensated, not mobilised, and
+ * simply bears the delay. This is the same `indecisionCost` used between
+ * neighbours, applied here to its relationship with the project.
+ *
+ * @param {string} state
+ * @param {object} params
+ * @returns {number}
+ */
+export function computeProjectPayoff(state, params = DEFAULT_PARAMS) {
+  if (!STATES.includes(state)) {
+    throw new Error(`Unknown state: ${state}`);
+  }
+  assertValidParams(params, [...PROJECT_PARAMS, 'indecisionCost']);
+
+  if (state === SUPPORTER) {
+    return (
+      params.compensationFairness + params.engagementIntensity - params.rumorPropagation
+    );
+  }
+  if (state === OPPOSED) {
+    const grievanceBacklog = 1 - params.grievanceResolutionRate;
+    return grievanceBacklog + params.rumorPropagation - params.compensationFairness;
+  }
+  return 0 - params.indecisionCost;
+}
+
+/**
+ * Everything a household weighs when deciding whether to hold its position:
+ * its neighbourhood and the project together.
+ *
+ * This is the quantity the update rule compares between neighbours. It is kept
+ * separate from its two components so that each can be tested on its own, and
+ * so that a surprising result can be traced to the social term or the project
+ * term rather than to their sum.
+ *
+ * @param {string[][]} grid
+ * @param {number} x
+ * @param {number} y
+ * @param {object} params
+ * @returns {number}
+ */
+export function computeTotalPayoff(grid, x, y, params = DEFAULT_PARAMS) {
+  return computeCellPayoff(grid, x, y, params) + computeProjectPayoff(grid[y][x], params);
 }
