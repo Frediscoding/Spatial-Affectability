@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spatial Affectability</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --surface-1: #fcfcfb;
+        --plane: #f9f9f7;
+        --text-primary: #0b0b0b;
+        --text-secondary: #52514e;
+        --muted: #898781;
+        --gridline: #e1e0d9;
+        --baseline: #c3c2b7;
+        --border: rgba(11, 11, 11, 0.1);
+
+        --supporter: #2a78d6;
+        --undecided: #c3c2b7;
+        --opposed: #e34948;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:where(:not([data-theme='light'])) {
+          color-scheme: dark;
+          --surface-1: #1a1a19;
+          --plane: #0d0d0d;
+          --text-primary: #ffffff;
+          --text-secondary: #c3c2b7;
+          --muted: #898781;
+          --gridline: #2c2c2a;
+          --baseline: #383835;
+          --border: rgba(255, 255, 255, 0.1);
+
+          --supporter: #3987e5;
+          --undecided: #52514e;
+          --opposed: #e66767;
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --surface-1: #1a1a19;
+        --plane: #0d0d0d;
+        --text-primary: #ffffff;
+        --text-secondary: #c3c2b7;
+        --gridline: #2c2c2a;
+        --baseline: #383835;
+        --border: rgba(255, 255, 255, 0.1);
+        --supporter: #3987e5;
+        --undecided: #52514e;
+        --opposed: #e66767;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--plane);
+        color: var(--text-primary);
+        font:
+          15px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      header {
+        max-width: 1100px;
+        margin: 0 auto 20px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .tagline {
+        color: var(--text-secondary);
+        margin: 4px 0 0;
+        font-size: 14px;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 20px;
+        align-items: start;
+      }
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .panel {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .panel h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+      }
+      #grid {
+        image-rendering: pixelated;
+        cursor: crosshair;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      button {
+        font: inherit;
+        font-size: 14px;
+        padding: 7px 14px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--surface-1);
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--baseline);
+      }
+      button.primary {
+        background: var(--text-primary);
+        color: var(--surface-1);
+        border-color: var(--text-primary);
+      }
+      .clock {
+        margin-left: auto;
+        align-self: center;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        font-size: 14px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-top: 14px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+      .swatch {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        flex: none;
+        transform: translateY(1px);
+      }
+      .legend-value {
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+
+      .slider {
+        margin-bottom: 14px;
+      }
+      .slider-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 13px;
+      }
+      .slider-head label {
+        color: var(--text-secondary);
+      }
+      .slider-head output {
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      input[type='range'] {
+        width: 100%;
+        margin: 4px 0 0;
+        accent-color: var(--supporter);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 2px 0 0;
+      }
+      select {
+        font: inherit;
+        font-size: 14px;
+        width: 100%;
+        padding: 7px 8px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--surface-1);
+        color: var(--text-primary);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        text-align: right;
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--gridline);
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      details {
+        margin-top: 16px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+      .table-wrap {
+        max-height: 260px;
+        overflow: auto;
+        margin-top: 10px;
+      }
+      .tooltip {
+        position: fixed;
+        pointer-events: none;
+        background: var(--text-primary);
+        color: var(--surface-1);
+        padding: 7px 10px;
+        border-radius: 6px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.08s;
+        z-index: 10;
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Spatial Affectability</h1>
+      <p class="tagline">
+        A spatial simulation for Stakeholder Engagement Plans. Each cell is one affected
+        household; one generation is about one month of project time.
+      </p>
+    </header>
+
+    <main>
+      <div>
+        <section class="panel">
+          <div class="controls">
+            <button id="play" class="primary">Play</button>
+            <button id="step">Step</button>
+            <button id="reset">Reset</button>
+            <span class="clock">Month <span id="month">0</span></span>
+          </div>
+          <canvas id="grid" width="480" height="480"></canvas>
+          <div class="legend" id="legend"></div>
+        </section>
+
+        <section class="panel" style="margin-top: 20px">
+          <h2>Positions over time</h2>
+          <canvas id="chart" width="960" height="260"></canvas>
+          <details>
+            <summary>Table view</summary>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Supporter</th>
+                    <th>Undecided</th>
+                    <th>Opposed</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+      </div>
+
+      <aside class="panel">
+        <h2>Scenario</h2>
+        <select id="scenario">
+          <option value="custom">Custom</option>
+          <option value="wellManaged">Well-managed resettlement</option>
+          <option value="delayed">Compensation delayed</option>
+          <option value="collapsed">Grievance mechanism collapsed</option>
+          <option value="knifeEdge">On the knife edge</option>
+        </select>
+
+        <h2 style="margin-top: 20px">Project levers</h2>
+        <div id="sliders"></div>
+      </aside>
+    </main>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script type="module" src="./src/ui/main.js"></script>
+  </body>
+</html>

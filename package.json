@@ -5,6 +5,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "start": "node serve.mjs",
     "test": "node --test \"test/**/*.test.js\""
   }
 }
