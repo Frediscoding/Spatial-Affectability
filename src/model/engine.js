@@ -40,6 +40,8 @@ export const DEFAULT_PARAMS = {
   engagementIntensity: 0.5, // frequency and quality of consultation and disclosure
   grievanceResolutionRate: 0.5, // share of grievances resolved within the committed time
   rumorPropagation: 0.3, // speed at which unverified information spreads
+
+  noise: 0.02, // probability a household picks a position for reasons the model does not see
 };
 
 /**
@@ -193,10 +195,10 @@ export function assertValidCell(grid, x, y) {
  * @param {number} y
  * @returns {string[]} neighbour states, between 3 and 8 of them
  */
-export function getNeighbours(grid, x, y) {
+export function getNeighbourCells(grid, x, y) {
   assertValidCell(grid, x, y);
 
-  const neighbours = [];
+  const cells = [];
   for (let dy = -1; dy <= 1; dy += 1) {
     for (let dx = -1; dx <= 1; dx += 1) {
       if (dx === 0 && dy === 0) {
@@ -207,11 +209,15 @@ export function getNeighbours(grid, x, y) {
       // No modulo here, on purpose. Out of bounds means "no neighbour", not
       // "look at the other side of the grid".
       if (ny >= 0 && ny < grid.length && nx >= 0 && nx < grid[0].length) {
-        neighbours.push(grid[ny][nx]);
+        cells.push({ x: nx, y: ny });
       }
     }
   }
-  return neighbours;
+  return cells;
+}
+
+export function getNeighbours(grid, x, y) {
+  return getNeighbourCells(grid, x, y).map((cell) => grid[cell.y][cell.x]);
 }
 
 /**
@@ -332,4 +338,130 @@ export function computeProjectPayoff(state, params = DEFAULT_PARAMS) {
  */
 export function computeTotalPayoff(grid, x, y, params = DEFAULT_PARAMS) {
   return computeCellPayoff(grid, x, y, params) + computeProjectPayoff(grid[y][x], params);
+}
+
+/**
+ * Tolerance below which two payoffs are treated as equal.
+ *
+ * Payoffs are sums of decimal slider values in binary floating point, so two
+ * values that are equal in the model can differ in the last bits depending on
+ * the order the additions happened to be performed. Without this tolerance the
+ * winner of a tie would be decided by rounding error: invisible, arbitrary, and
+ * dependent on where a cell sits in the grid.
+ */
+export const PAYOFF_EPSILON = 1e-9;
+
+/** Every parameter the simulation needs to run a generation. */
+export const ALL_PARAMS = [...PAIRWISE_PARAMS, ...ISOLATION_PARAMS, ...PROJECT_PARAMS, 'noise'];
+
+/**
+ * Decides the next state of one household, given every payoff on the board.
+ *
+ * The rule is Nowak & May imitation: adopt the position of whoever is doing
+ * best in the neighbourhood, including yourself. Two refinements are needed to
+ * make that deterministic.
+ *
+ * **Ties are resolved in favour of the status quo.** If the household is
+ * already within `PAYOFF_EPSILON` of the best payoff around it, it does not
+ * move. A household changes its declared position towards a project because it
+ * sees someone doing visibly better, not because someone is doing marginally
+ * better. Inertia is also the conservative assumption: it makes the model slower
+ * to flip, so any tipping point it does produce is not an artefact of churn.
+ *
+ * **Ties between neighbours are resolved by weight of numbers, never by
+ * position.** When several neighbours share the best payoff but hold different
+ * positions, the most represented among them wins. Scanning them in a fixed
+ * order would be simpler, but it would hand every tie to whichever neighbour
+ * comes first, which on a grid means a systematic drift towards one corner. That
+ * would be a visible artefact along the very edges the model exists to study.
+ * If the tied neighbours are still evenly split, the household holds its
+ * position.
+ *
+ * @param {string[][]} grid - the grid at the start of the generation
+ * @param {number[][]} payoffs - total payoff of every cell, same dimensions
+ * @param {number} x
+ * @param {number} y
+ * @returns {string} the state the household holds in the next generation
+ */
+export function decideNextState(grid, payoffs, x, y) {
+  const own = grid[y][x];
+  const ownPayoff = payoffs[y][x];
+  const neighbours = getNeighbourCells(grid, x, y);
+
+  let best = ownPayoff;
+  for (const cell of neighbours) {
+    if (payoffs[cell.y][cell.x] > best) {
+      best = payoffs[cell.y][cell.x];
+    }
+  }
+
+  if (ownPayoff >= best - PAYOFF_EPSILON) {
+    return own; // already among the best: hold position
+  }
+
+  const votes = new Map();
+  for (const cell of neighbours) {
+    if (payoffs[cell.y][cell.x] >= best - PAYOFF_EPSILON) {
+      const state = grid[cell.y][cell.x];
+      votes.set(state, (votes.get(state) ?? 0) + 1);
+    }
+  }
+
+  let winner = own;
+  let winningVotes = 0;
+  let contested = false;
+  for (const [state, count] of votes) {
+    if (count > winningVotes) {
+      winner = state;
+      winningVotes = count;
+      contested = false;
+    } else if (count === winningVotes) {
+      contested = true;
+    }
+  }
+
+  return contested ? own : winner;
+}
+
+/**
+ * Advances the whole grid by one generation.
+ *
+ * The update is **synchronous**: every payoff is computed from the grid as it
+ * stands at the start of the generation, and only then is the new grid built.
+ * Updating cells one by one in place would let a cell react to a neighbour that
+ * had already moved this turn, which silently turns the model into a different
+ * one.
+ *
+ * The function is pure. It does not modify the grid it is given, and its only
+ * source of randomness is injected, so a run can be replayed exactly.
+ *
+ * `noise` is the probability that a household ignores its neighbourhood
+ * entirely and picks a position at random, standing in for the private reasons
+ * no model captures. It also prevents the grid from freezing into a static
+ * pattern. A household may draw the position it already held, so the effective
+ * rate of visible change is lower than `noise` itself.
+ *
+ * @param {string[][]} grid
+ * @param {object} params
+ * @param {() => number} random - source of randomness in [0, 1), injected so
+ *   that tests can make a run deterministic
+ * @returns {string[][]} a new grid; the input is left untouched
+ */
+export function stepGeneration(grid, params = DEFAULT_PARAMS, random = Math.random) {
+  assertValidParams(params, ALL_PARAMS);
+  assertValidCell(grid, 0, 0); // rejects a ragged or empty grid
+  if (typeof random !== 'function') {
+    throw new Error('Invalid random source: expected a function returning [0, 1)');
+  }
+
+  const payoffs = grid.map((row, y) => row.map((_, x) => computeTotalPayoff(grid, x, y, params)));
+
+  return grid.map((row, y) =>
+    row.map((_, x) => {
+      if (params.noise > 0 && random() < params.noise) {
+        return STATES[Math.floor(random() * STATES.length) % STATES.length];
+      }
+      return decideNextState(grid, payoffs, x, y);
+    }),
+  );
 }
