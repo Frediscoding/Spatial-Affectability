@@ -19,6 +19,28 @@ export const UNDECIDED = 'UNDECIDED';
 export const STATES = [SUPPORTER, OPPOSED, UNDECIDED];
 
 /**
+ * A cell that is not a household at all.
+ *
+ * The grid is always a rectangle, because that is what a raster is. The area
+ * actually affected by a project is not: it is the footprint polygon, and the
+ * cells of the rectangle that fall outside it are simply not part of the
+ * community being modelled. They hold `OUTSIDE`.
+ *
+ * This is deliberately NOT a fourth state. An outside cell has no position, no
+ * payoff, and no vote; it never updates and it is excluded from every share the
+ * simulation reports. Putting it in `STATES` would make noise able to conjure a
+ * household out of empty ground, and would put it in the denominator of every
+ * percentage on screen.
+ *
+ * What it does is turn the boundary of the grid into the boundary of the
+ * footprint. A household on the edge of the polygon has fewer neighbours, in
+ * exactly the same way a household in a corner of the rectangle does, and the
+ * edge effects the model exists to show follow the real perimeter of the
+ * project instead of an arbitrary rectangle.
+ */
+export const OUTSIDE = 'OUTSIDE';
+
+/**
  * Default model parameters.
  *
  * `solidarityReward` is deliberately higher than `supportReward`: opposition
@@ -192,10 +214,16 @@ export function assertValidCell(grid, x, y) {
  * erasing the edge effects along the project footprint, which are the result
  * the model exists to show.
  *
+ * `OUTSIDE` cells are not neighbours either, for the same reason and by the
+ * same mechanism: land outside the footprint is treated exactly like land off
+ * the edge of the grid. This is what lets an imported footprint have a real
+ * perimeter, and it means a household can hold anywhere from 0 to 8 neighbours,
+ * not just the three rectangular cases.
+ *
  * @param {string[][]} grid
  * @param {number} x
  * @param {number} y
- * @returns {string[]} neighbour states, between 3 and 8 of them
+ * @returns {{x: number, y: number}[]} coordinates of the neighbours, 0 to 8 of them
  */
 export function getNeighbourCells(grid, x, y) {
   assertValidCell(grid, x, y);
@@ -210,9 +238,13 @@ export function getNeighbourCells(grid, x, y) {
       const nx = x + dx;
       // No modulo here, on purpose. Out of bounds means "no neighbour", not
       // "look at the other side of the grid".
-      if (ny >= 0 && ny < grid.length && nx >= 0 && nx < grid[0].length) {
-        cells.push({ x: nx, y: ny });
+      if (ny < 0 || ny >= grid.length || nx < 0 || nx >= grid[0].length) {
+        continue;
       }
+      if (grid[ny][nx] === OUTSIDE) {
+        continue; // outside the footprint: nobody lives there
+      }
+      cells.push({ x: nx, y: ny });
     }
   }
   return cells;
@@ -260,6 +292,9 @@ export function computeCellPayoff(grid, x, y, params = DEFAULT_PARAMS) {
   const neighbours = getNeighbours(grid, x, y);
   const self = grid[y][x];
 
+  if (self === OUTSIDE) {
+    return 0; // empty ground draws nothing from anyone
+  }
   if (neighbours.length === 0) {
     return 0;
   }
@@ -352,6 +387,9 @@ export function computeProjectPayoff(state, params = DEFAULT_PARAMS) {
  * @returns {number}
  */
 export function computeTotalPayoff(grid, x, y, params = DEFAULT_PARAMS) {
+  if (grid[y]?.[x] === OUTSIDE) {
+    return 0;
+  }
   return (
     computeCellPayoff(grid, x, y, params) +
     params.projectWeight * computeProjectPayoff(grid[y][x], params)
@@ -410,6 +448,9 @@ export const ALL_PARAMS = [
  */
 export function decideNextState(grid, payoffs, x, y) {
   const own = grid[y][x];
+  if (own === OUTSIDE) {
+    return OUTSIDE; // empty ground never becomes a household
+  }
   const ownPayoff = payoffs[y][x];
   const neighbours = getNeighbourCells(grid, x, y);
 
@@ -482,7 +523,12 @@ export function stepGeneration(grid, params = DEFAULT_PARAMS, random = Math.rand
   const payoffs = grid.map((row, y) => row.map((_, x) => computeTotalPayoff(grid, x, y, params)));
 
   return grid.map((row, y) =>
-    row.map((_, x) => {
+    row.map((cell, x) => {
+      // Checked before the noise draw: empty ground must not be reachable by
+      // noise either, or the footprint would slowly fill itself in.
+      if (cell === OUTSIDE) {
+        return OUTSIDE;
+      }
       if (params.noise > 0 && random() < params.noise) {
         return STATES[Math.floor(random() * STATES.length) % STATES.length];
       }
@@ -496,4 +542,89 @@ export function stepGeneration(grid, params = DEFAULT_PARAMS, random = Math.rand
       return decideNextState(grid, payoffs, x, y);
     }),
   );
+}
+
+/** The number of Moore neighbours a fully interior household has. */
+export const FULL_NEIGHBOURHOOD = 8;
+
+/**
+ * Whether a household sits on the perimeter of the affected area.
+ *
+ * A household is on the perimeter when it has fewer than eight neighbours,
+ * whatever the reason: it is on the edge of the grid, or it borders land outside
+ * the footprint. Both mean the same thing on the ground — one side of this
+ * household faces something other than more community.
+ *
+ * Defining exposure by neighbour count rather than by position is what makes the
+ * statistic survive the switch from a rectangle to an imported polygon. A
+ * household deep inside the bounding box but on the lip of a concavity in the
+ * footprint is a boundary household, and any definition based on coordinates
+ * would call it interior.
+ *
+ * @param {string[][]} grid
+ * @param {number} x
+ * @param {number} y
+ * @returns {boolean} false for a cell that is not a household at all
+ */
+export function isBoundaryHousehold(grid, x, y) {
+  if (grid[y][x] === OUTSIDE) {
+    return false;
+  }
+  return getNeighbourCells(grid, x, y).length < FULL_NEIGHBOURHOOD;
+}
+
+/**
+ * Counts households by position, excluding land outside the footprint.
+ *
+ * `OUTSIDE` cells are not in any count and not in the total. A percentage
+ * computed against the size of the raster rather than against the number of
+ * households would silently shrink every share as soon as a footprint is
+ * imported, and the shape of the polygon would look like a change in opinion.
+ *
+ * @param {string[][]} grid
+ * @returns {{SUPPORTER: number, OPPOSED: number, UNDECIDED: number, households: number}}
+ */
+export function countStates(grid) {
+  const counts = { [SUPPORTER]: 0, [OPPOSED]: 0, [UNDECIDED]: 0, households: 0 };
+  for (const row of grid) {
+    for (const state of row) {
+      if (state === OUTSIDE) {
+        continue;
+      }
+      counts[state] += 1;
+      counts.households += 1;
+    }
+  }
+  return counts;
+}
+
+/**
+ * The same counts, split between the perimeter of the affected area and its
+ * interior.
+ *
+ * This is the measurement the model exists to produce. The claim from the
+ * resettlement literature is that opposition concentrates along the boundary of
+ * the project footprint, where households have fewer neighbours to reinforce a
+ * position and are therefore more volatile. Splitting the counts is what turns
+ * that claim into a number the user can watch move.
+ *
+ * @param {string[][]} grid
+ * @returns {{boundary: object, interior: object}} each shaped like countStates
+ */
+export function countStatesByExposure(grid) {
+  const empty = () => ({ [SUPPORTER]: 0, [OPPOSED]: 0, [UNDECIDED]: 0, households: 0 });
+  const result = { boundary: empty(), interior: empty() };
+
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < grid[y].length; x += 1) {
+      const state = grid[y][x];
+      if (state === OUTSIDE) {
+        continue;
+      }
+      const bucket = isBoundaryHousehold(grid, x, y) ? result.boundary : result.interior;
+      bucket[state] += 1;
+      bucket.households += 1;
+    }
+  }
+  return result;
 }
