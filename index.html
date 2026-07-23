@@ -245,6 +245,72 @@
         overflow: auto;
         margin-top: 10px;
       }
+      input[type='file'] {
+        font: inherit;
+        font-size: 12.5px;
+        width: 100%;
+        color: var(--text-secondary);
+      }
+      input[type='file']::file-selector-button {
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 11px;
+        margin-right: 8px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--surface-1);
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 8px 0 0;
+      }
+      .note.error {
+        color: var(--opposed);
+      }
+      .link {
+        font: inherit;
+        font-size: 12.5px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--text-secondary);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .link[hidden] {
+        display: none;
+      }
+
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 28px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--gridline);
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .stat-label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .stat-value {
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
+      }
+      .stat-note {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
       .tooltip {
         position: fixed;
         pointer-events: none;
@@ -280,8 +346,9 @@
             <button id="reset">Reset</button>
             <span class="clock">Month <span id="month">0</span></span>
           </div>
-          <canvas id="grid" width="480" height="480"></canvas>
+          <canvas id="grid" width="600" height="600"></canvas>
           <div class="legend" id="legend"></div>
+          <div class="stats" id="exposure"></div>
         </section>
 
         <section class="panel" style="margin-top: 20px">
@@ -307,7 +374,32 @@
       </div>
 
       <aside class="panel">
-        <h2>Scenario</h2>
+        <h2>Project footprint</h2>
+        <input
+          type="file"
+          id="footprint-file"
+          accept=".kmz,.kml,.geojson,.json,application/vnd.google-earth.kmz"
+        />
+        <p class="hint">
+          A polygon exported from Google Earth or a GIS. The simulation then runs inside the
+          footprint, and its perimeter becomes the edge of the affected area.
+        </p>
+
+        <div class="slider-head" style="margin-top: 14px">
+          <label for="cell-size">One cell stands for</label>
+        </div>
+        <select id="cell-size">
+          <option value="10">10 m × 10 m</option>
+          <option value="25">25 m × 25 m</option>
+          <option value="50" selected>50 m × 50 m</option>
+          <option value="100">100 m × 100 m</option>
+          <option value="200">200 m × 200 m</option>
+        </select>
+
+        <p class="note" id="footprint-summary"></p>
+        <button class="link" id="clear-footprint" hidden>Back to the plain rectangle</button>
+
+        <h2 style="margin-top: 20px">Scenario</h2>
         <select id="scenario">
           <option value="custom">Custom</option>
           <option value="wellManaged">Well-managed resettlement</option>

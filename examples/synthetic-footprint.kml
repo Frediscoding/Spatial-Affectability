@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A synthetic project footprint, for trying the import without a GIS.
+
+  Nothing here is real. The outline is invented and the coordinates are
+  arbitrary; they place it on land only so that the scale of a degree of
+  longitude is realistic. It is drawn to exercise the parts of the model that
+  the plain rectangle cannot reach:
+
+    - a concave outline, with a notch cut into the east side, so the perimeter
+      runs through the middle of the raster;
+    - a narrow waist, which nearly splits the community in two and lets the
+      halves tip independently;
+    - a hole, standing for a parcel not being acquired.
+
+  About 1.2 km across, so roughly 25 x 25 cells at 50 m per cell.
+-->
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Synthetic project footprint</name>
+    <Placemark>
+      <name>Affected area</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              2.5950,13.3950,0
+              2.6050,13.3950,0
+              2.6050,13.4000,0
+              2.6010,13.4005,0
+              2.6008,13.4030,0
+              2.6060,13.4032,0
+              2.6060,13.4060,0
+              2.5950,13.4060,0
+              2.5950,13.3950,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+        <innerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              2.5980,13.4000,0
+              2.6000,13.4000,0
+              2.6000,13.4015,0
+              2.5980,13.4015,0
+              2.5980,13.4000,0
+            </coordinates>
+          </LinearRing>
+        </innerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>

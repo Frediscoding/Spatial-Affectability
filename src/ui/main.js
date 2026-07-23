@@ -2,20 +2,32 @@
  * Spatial Affectability — browser front end.
  *
  * The engine knows nothing about this file: it is pure, and everything here is
- * display and input. All the model logic lives in ../model/engine.js.
+ * display and input. All the model logic lives in ../model/engine.js, and the
+ * geography in ../model/footprint.js and ../model/kmz.js.
  */
 
 import {
   SUPPORTER,
   OPPOSED,
   UNDECIDED,
+  OUTSIDE,
   STATES,
   DEFAULT_PARAMS,
   stepGeneration,
+  countStates,
+  countStatesByExposure,
+  isBoundaryHousehold,
 } from '../model/engine.js';
+import { parseFootprint, rasterizeFootprint, gridFromMask } from '../model/footprint.js';
+import { readKmz } from '../model/kmz.js';
 
-const GRID_SIZE = 60;
+/** Side of the plain rectangle used until a footprint is imported. */
+const RECTANGLE_SIDE = 60;
 const MS_PER_GENERATION = 140;
+/** Cell size used when the control has no usable value. Matches the marked-up default. */
+const DEFAULT_CELL_METRES = 50;
+/** Longest side of the canvas in device pixels; the grid is scaled to fit it. */
+const CANVAS_TARGET = 600;
 
 /** Diverging palette: two poles and a neutral midpoint. Validated for CVD. */
 const STATE_STYLE = {
@@ -124,6 +136,30 @@ const SCENARIOS = {
 // --- State --------------------------------------------------------------
 
 const params = { ...DEFAULT_PARAMS };
+
+/**
+ * The plain rectangle the page opens on.
+ *
+ * Kept as the default deliberately. It has no scale and no geography, which
+ * makes it the control case: anything the imported footprint does differently is
+ * the shape of the project talking, not the model.
+ */
+function rectangleRaster() {
+  return {
+    mask: Array.from({ length: RECTANGLE_SIDE }, () => Array(RECTANGLE_SIDE).fill(true)),
+    width: RECTANGLE_SIDE,
+    height: RECTANGLE_SIDE,
+    cellMetres: null,
+    households: RECTANGLE_SIDE * RECTANGLE_SIDE,
+    areaHectares: null,
+  };
+}
+
+let raster = rectangleRaster();
+/** The imported polygons, kept so the cell size can be changed without the file. */
+let polygons = null;
+let footprintName = '';
+
 let grid = seedGrid();
 let history = [];
 let month = 0;
@@ -133,6 +169,7 @@ const el = {
   grid: document.getElementById('grid'),
   chart: document.getElementById('chart'),
   legend: document.getElementById('legend'),
+  exposure: document.getElementById('exposure'),
   sliders: document.getElementById('sliders'),
   scenario: document.getElementById('scenario'),
   month: document.getElementById('month'),
@@ -141,6 +178,10 @@ const el = {
   reset: document.getElementById('reset'),
   tableBody: document.getElementById('table-body'),
   tooltip: document.getElementById('tooltip'),
+  file: document.getElementById('footprint-file'),
+  cellSize: document.getElementById('cell-size'),
+  summary: document.getElementById('footprint-summary'),
+  clearFootprint: document.getElementById('clear-footprint'),
 };
 
 function colourOf(state) {
@@ -150,29 +191,56 @@ function colourOf(state) {
 }
 
 function seedGrid() {
-  return Array.from({ length: GRID_SIZE }, () =>
-    Array.from({ length: GRID_SIZE }, () => STATES[Math.floor(Math.random() * STATES.length)]),
+  return gridFromMask(
+    raster.mask,
+    () => STATES[Math.floor(Math.random() * STATES.length)],
+    OUTSIDE,
   );
 }
 
+/** Shares of each position, as a percentage of households — not of the raster. */
 function shares(g) {
-  const counts = { [SUPPORTER]: 0, [OPPOSED]: 0, [UNDECIDED]: 0 };
-  for (const row of g) {
-    for (const state of row) counts[state] += 1;
-  }
-  const total = GRID_SIZE * GRID_SIZE;
+  const counts = countStates(g);
+  const total = Math.max(counts.households, 1);
   return Object.fromEntries(STATES.map((s) => [s, (100 * counts[s]) / total]));
 }
 
 // --- Rendering ----------------------------------------------------------
 
+/**
+ * Sizes the canvas to the grid.
+ *
+ * An imported footprint is rarely square, and stretching it to a fixed square
+ * canvas would distort the very shape the import exists to preserve. The canvas
+ * takes the aspect ratio of the raster, and CSS scales it down to the column
+ * width from there.
+ */
+function resizeCanvas() {
+  const scale = Math.max(1, Math.floor(CANVAS_TARGET / Math.max(raster.width, raster.height)));
+  el.grid.width = raster.width * scale;
+  el.grid.height = raster.height * scale;
+}
+
 function drawGrid() {
   const ctx = el.grid.getContext('2d');
-  const cell = el.grid.width / GRID_SIZE;
-  for (let y = 0; y < GRID_SIZE; y += 1) {
-    for (let x = 0; x < GRID_SIZE; x += 1) {
+  const cellW = el.grid.width / raster.width;
+  const cellH = el.grid.height / raster.height;
+  const background = getComputedStyle(document.documentElement)
+    .getPropertyValue('--plane')
+    .trim();
+
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, el.grid.width, el.grid.height);
+
+  for (let y = 0; y < raster.height; y += 1) {
+    for (let x = 0; x < raster.width; x += 1) {
+      // Land outside the footprint keeps the page background, so the silhouette
+      // of the project reads as a shape rather than as a fourth position.
+      if (grid[y][x] === OUTSIDE) {
+        continue;
+      }
       ctx.fillStyle = colourOf(grid[y][x]);
-      ctx.fillRect(x * cell, y * cell, cell, cell);
+      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
     }
   }
 }
@@ -268,6 +336,44 @@ function drawLegend() {
   ).join('');
 }
 
+/**
+ * The headline measurement: how opposition on the perimeter compares with
+ * opposition inside.
+ *
+ * The claim the model is built to test is that the two differ. Reporting a
+ * single grid-wide percentage averages exactly the effect being looked for away.
+ */
+function drawExposure() {
+  const { boundary, interior } = countStatesByExposure(grid);
+  const pct = (bucket) => (bucket.households === 0 ? null : (100 * bucket[OPPOSED]) / bucket.households);
+  const onEdge = pct(boundary);
+  const inside = pct(interior);
+  const show = (value) => (value === null ? '—' : `${value.toFixed(1)}%`);
+
+  let gap = 'no interior to compare with';
+  if (onEdge !== null && inside !== null) {
+    const delta = onEdge - inside;
+    const direction = delta >= 0 ? 'higher' : 'lower';
+    gap = `${Math.abs(delta).toFixed(1)} points ${direction} on the perimeter`;
+  }
+
+  el.exposure.innerHTML = `
+    <div class="stat">
+      <span class="stat-label">Opposed, on the perimeter</span>
+      <span class="stat-value">${show(onEdge)}</span>
+      <span class="stat-note">${boundary.households.toLocaleString()} households</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Opposed, in the interior</span>
+      <span class="stat-value">${show(inside)}</span>
+      <span class="stat-note">${interior.households.toLocaleString()} households</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Edge effect</span>
+      <span class="stat-value">${gap}</span>
+    </div>`;
+}
+
 function drawTable() {
   // Most recent first, capped so the DOM stays small.
   el.tableBody.innerHTML = history
@@ -280,11 +386,29 @@ function drawTable() {
     .join('');
 }
 
+function drawSummary(message = null, isError = false) {
+  el.summary.className = isError ? 'note error' : 'note';
+  if (message !== null) {
+    el.summary.textContent = message;
+    return;
+  }
+  if (polygons === null) {
+    el.summary.textContent = `Plain rectangle, ${RECTANGLE_SIDE} × ${RECTANGLE_SIDE} households, no scale. Import a footprint to give it geography.`;
+    return;
+  }
+  const cell = Math.round(raster.cellMetres);
+  el.summary.textContent =
+    `${footprintName}: ${raster.households.toLocaleString()} households on ` +
+    `${raster.areaHectares.toFixed(1)} ha, at ${cell} m per cell ` +
+    `(${raster.width} × ${raster.height} cells).`;
+}
+
 function render() {
   el.month.textContent = String(month);
   drawGrid();
   drawChart();
   drawLegend();
+  drawExposure();
   drawTable();
 }
 
@@ -310,11 +434,97 @@ function setPlaying(on) {
 
 function reset() {
   setPlaying(false);
+  resizeCanvas();
   grid = seedGrid();
   month = 0;
   history = [shares(grid)];
   render();
+  drawSummary();
 }
+
+// --- Importing a footprint ----------------------------------------------
+
+/**
+ * The chosen cell size, in metres.
+ *
+ * Falls back to the default rather than trusting the markup: an empty or
+ * unparseable value would reach `rasterizeFootprint` as zero and turn a valid
+ * footprint into an error message about the cell size, which points the user at
+ * the wrong thing entirely.
+ */
+function cellMetres() {
+  const chosen = Number(el.cellSize.value);
+  return Number.isFinite(chosen) && chosen > 0 ? chosen : DEFAULT_CELL_METRES;
+}
+
+/**
+ * Adopts a footprint, but only once it has produced a raster.
+ *
+ * Rasterising can fail on a legitimately parsed polygon — a corridor too long to
+ * resolve is the real case. Assigning the polygons first and rasterising after
+ * would leave the page insisting a footprint is loaded while still running the
+ * previous grid, and the next unrelated change to the cell size would silently
+ * adopt it. Nothing is committed until there is something to show.
+ *
+ * @param {object[]} parsed - polygons from `parseFootprint`
+ * @param {string} name - what to call the footprint on screen
+ */
+function adoptFootprint(parsed, name) {
+  const next = rasterizeFootprint(parsed, cellMetres());
+  raster = next;
+  polygons = parsed;
+  footprintName = name;
+  el.clearFootprint.hidden = false;
+  reset();
+}
+
+/**
+ * Reads a dropped file, whatever of the three formats it turns out to be.
+ *
+ * The format is decided by the first two bytes, not by the extension: a KMZ is a
+ * ZIP and starts with `PK`, and anything else is text. Trusting the extension
+ * would break on the very common case of a `.kmz` that a user renamed, or a file
+ * saved from a browser with no extension at all.
+ */
+async function importFootprint(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  const text = isZip ? await readKmz(bytes) : new TextDecoder('utf-8').decode(bytes);
+  adoptFootprint(parseFootprint(text), file.name);
+}
+
+el.file.addEventListener('change', async () => {
+  const [file] = el.file.files;
+  if (!file) return;
+  setPlaying(false);
+  try {
+    await importFootprint(file);
+  } catch (error) {
+    // Every failure path in the import chain throws with a message written for
+    // the person holding the file, so it is shown as-is rather than replaced by
+    // a generic one.
+    drawSummary(error.message, true);
+  }
+});
+
+el.cellSize.addEventListener('change', () => {
+  if (polygons === null) return; // the rectangle has no scale to change
+  setPlaying(false);
+  try {
+    adoptFootprint(polygons, footprintName);
+  } catch (error) {
+    drawSummary(error.message, true);
+  }
+});
+
+el.clearFootprint.addEventListener('click', () => {
+  polygons = null;
+  footprintName = '';
+  raster = rectangleRaster();
+  el.file.value = '';
+  el.clearFootprint.hidden = true;
+  reset();
+});
 
 // --- Controls -----------------------------------------------------------
 
@@ -369,14 +579,16 @@ function hideTooltip() {
 
 el.grid.addEventListener('mousemove', (event) => {
   const rect = el.grid.getBoundingClientRect();
-  const x = Math.floor(((event.clientX - rect.left) / rect.width) * GRID_SIZE);
-  const y = Math.floor(((event.clientY - rect.top) / rect.height) * GRID_SIZE);
-  if (x < 0 || y < 0 || x >= GRID_SIZE || y >= GRID_SIZE) return hideTooltip();
-  const edge = Math.min(x, y, GRID_SIZE - 1 - x, GRID_SIZE - 1 - y) === 0;
-  showTooltip(
-    event,
-    `Household (${x}, ${y})<br>${STATE_STYLE[grid[y][x]].label}${edge ? '<br>on the footprint boundary' : ''}`,
-  );
+  const x = Math.floor(((event.clientX - rect.left) / rect.width) * raster.width);
+  const y = Math.floor(((event.clientY - rect.top) / rect.height) * raster.height);
+  if (x < 0 || y < 0 || x >= raster.width || y >= raster.height) return hideTooltip();
+
+  if (grid[y][x] === OUTSIDE) {
+    return showTooltip(event, 'Outside the project footprint');
+  }
+  const scale = raster.cellMetres === null ? '' : `<br>${Math.round(raster.cellMetres)} m cell`;
+  const edge = isBoundaryHousehold(grid, x, y) ? '<br>on the footprint boundary' : '';
+  showTooltip(event, `Household (${x}, ${y})<br>${STATE_STYLE[grid[y][x]].label}${edge}${scale}`);
 });
 el.grid.addEventListener('mouseleave', hideTooltip);
 

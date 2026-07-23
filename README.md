@@ -35,6 +35,8 @@ Each household scores its interaction with its eight neighbours and with the pro
 
 **Grid edges are fixed, not wrapped into a torus.** This is a deliberate design decision. A torus would be simpler to implement but would erase **edge effects along the project footprint**, where households at the boundary of the affected area behave differently from those at the centre. That asymmetry is real in resettlement contexts and must survive into the model.
 
+A household is on the perimeter when it has fewer than eight neighbours — because it is on the edge of the grid, or because it borders land outside the footprint. The simulation reports opposition on the perimeter and in the interior separately, since a single grid-wide percentage averages away exactly the effect being looked for.
+
 ### Parameters
 
 | Parameter | Real-world meaning |
@@ -49,24 +51,44 @@ Each household scores its interaction with its eight neighbours and with the pro
 ### What to look for
 
 - **Opposition pockets** surviving even under high compensation, protected by internal solidarity
-- **Edge effects** concentrating opposition along the project footprint
+- **Edge effects** along the project footprint: opposition on the perimeter behaving differently from opposition inside
 - **Phase transition**: a threshold below which the whole grid flips to opposition
 - **Grievance backlog spiral**: unresolved grievances feeding rumour propagation in a self-reinforcing loop
 
 ---
 
+## Importing a project footprint
+
+The simulation opens on a plain 60 × 60 rectangle. That rectangle has no scale and no geography, which is what makes it useful: it is the control case.
+
+You can then import the real outline of a project — **`.kmz`, `.kml` or `.geojson`**, the formats Google Earth and any GIS export — and the simulation runs **inside the polygon**. Cells outside it are not households: they have no position, they never update, and they are excluded from every percentage on screen. The perimeter of the polygon becomes the edge of the affected area.
+
+This is the same fixed-edge rule as before, generalised. A household on the lip of a concavity in the footprint has fewer neighbours in exactly the way a corner household does, so the edge effects follow the real shape of the project instead of an arbitrary rectangle. Two consequences worth watching for:
+
+- a **narrow waist** in the footprint nearly separates two parts of the community, and they can tip independently;
+- a **hole** — a parcel not being acquired — creates an interior perimeter, with the same volatility as the outer one.
+
+**You choose the cell size in metres, not the size of the grid.** The grid is derived from it. A cell then stands for a fixed area of ground whatever the project, so two footprints can be compared; with a fixed grid stretched over the bounding box, a cell would mean twenty metres on one project and two kilometres on another. A cell counts as inside the footprint when its centre is.
+
+`examples/synthetic-footprint.kml` is an invented outline for trying this without a GIS. It has a concavity, a narrow waist and a hole.
+
+The reader has no dependencies: a `.kmz` is a ZIP, and `DecompressionStream` is part of the platform.
+
+---
+
 ## Roadmap
 
-- [ ] Phase 1 — Core engine: `computeNeighbourPayoff`, `computeCellPayoff`, `stepGeneration` as pure functions
-- [ ] Phase 2 — Unit tests, with explicit coverage of fixed-edge neighbour counts
-- [ ] Phase 3 — Canvas rendering, playback controls, live parameter sliders, state time-series
-- [ ] Phase 4 — Preset scenarios, explanatory panel, deployment
+- [x] Phase 1 — Core engine: `computeNeighbourPayoff`, `computeCellPayoff`, `stepGeneration` as pure functions
+- [x] Phase 2 — Unit tests, with explicit coverage of fixed-edge neighbour counts
+- [x] Phase 3 — Canvas rendering, playback controls, live parameter sliders, state time-series
+- [x] Phase 4 — Preset scenarios, footprint import, perimeter-versus-interior statistics
+- [ ] Phase 5 — Explanatory panel and deployment
 
 ---
 
 ## Data
 
-**All data is synthetic.** No real project, community, or field data is used anywhere in this repository.
+**All data is synthetic.** No real project, community, or field data is used anywhere in this repository, and none is ever uploaded: an imported footprint is read in the browser and never leaves it.
 
 ---
 
