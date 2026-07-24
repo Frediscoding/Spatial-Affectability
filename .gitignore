@@ -150,3 +150,9 @@ vite.config.ts.timestamp-*
 
 # Windows
 Thumbs.db
+
+# Personal history log — stays local, never committed or pushed
+HISTORY.md
+
+# Personal screen recordings — stay local
+*.mp4
