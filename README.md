@@ -4,7 +4,10 @@
 
 An interactive simulation showing how support and opposition to an infrastructure project spread through an affected community, and how compensation fairness, stakeholder engagement and grievance handling change the outcome.
 
-> **Status: work in progress.** Core engine under construction. Built during the
+**[Run it in your browser →](https://frediscoding.github.io/Spatial-Affectability/)**
+
+> **Status: complete and running.** Engine, tests, interface, footprint import and
+> explanatory panel are all in place; 117 tests passing. Built during the
 > [Vibe Coding Studio](https://philomathlearning.com) (Philomath, Phillip Compeau, Carnegie Mellon University).
 
 ---
@@ -76,13 +79,26 @@ The reader has no dependencies: a `.kmz` is a ZIP, and `DecompressionStream` is 
 
 ---
 
+## Running it locally
+
+Node 22 or later. There are no dependencies to install — the project uses only the standard library, in the browser and in Node.
+
+```sh
+npm start          # serves http://localhost:8000
+npm test           # 117 tests, no test framework
+```
+
+Opening `index.html` straight from the file system will not work: browsers refuse to load ES modules over `file://`, which is what `serve.mjs` exists to solve.
+
+---
+
 ## Roadmap
 
 - [x] Phase 1 — Core engine: `computeNeighbourPayoff`, `computeCellPayoff`, `stepGeneration` as pure functions
 - [x] Phase 2 — Unit tests, with explicit coverage of fixed-edge neighbour counts
 - [x] Phase 3 — Canvas rendering, playback controls, live parameter sliders, state time-series
 - [x] Phase 4 — Preset scenarios, footprint import, perimeter-versus-interior statistics
-- [ ] Phase 5 — Explanatory panel and deployment
+- [x] Phase 5 — Explanatory panel and deployment
 
 ---
 
