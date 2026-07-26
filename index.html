@@ -311,6 +311,97 @@
         color: var(--text-secondary);
       }
 
+      .explainer {
+        max-width: 1100px;
+        margin: 20px auto 0;
+      }
+      .explainer h3 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 26px 0 8px;
+        letter-spacing: -0.01em;
+      }
+      .explainer h3:first-of-type {
+        margin-top: 0;
+      }
+      /* Prose is capped at a readable measure even though the panel is wide. */
+      .prose {
+        max-width: 66ch;
+        color: var(--text-secondary);
+      }
+      .prose p {
+        margin: 0 0 10px;
+      }
+      .prose p:last-child {
+        margin-bottom: 0;
+      }
+      .prose strong {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .states {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 10px 24px;
+        margin: 0;
+        max-width: 900px;
+      }
+      .state-def {
+        display: grid;
+        grid-template-columns: 11px 1fr;
+        gap: 4px 8px;
+        align-items: baseline;
+      }
+      .state-def dt {
+        display: contents;
+        font-weight: 600;
+      }
+      .state-def dd {
+        grid-column: 2;
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--text-secondary);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px 24px;
+      }
+      .card h4 {
+        font-size: 13.5px;
+        font-weight: 600;
+        margin: 0 0 3px;
+      }
+      .card p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--text-secondary);
+      }
+      .caveat {
+        margin-top: 26px;
+        padding: 14px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--plane);
+      }
+      .caveat p {
+        max-width: 66ch;
+      }
+      footer {
+        max-width: 1100px;
+        margin: 20px auto 0;
+        padding-top: 16px;
+        border-top: 1px solid var(--gridline);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 20px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--text-secondary);
+      }
+
       .tooltip {
         position: fixed;
         pointer-events: none;
@@ -412,6 +503,166 @@
         <div id="sliders"></div>
       </aside>
     </main>
+
+    <section class="panel explainer">
+      <h2>How to read this</h2>
+
+      <h3>What you are looking at</h3>
+      <div class="prose">
+        <p>
+          Each cell on the grid is one <strong>affected household</strong>, and one generation is
+          about one month of project time. Every month, a household weighs how it is getting on
+          with its eight neighbours against what the project is offering it, then takes the
+          position of whichever neighbour is doing best. Nobody optimises, and nobody sees the
+          whole picture — everyone copies whoever seems to be faring well nearby.
+        </p>
+        <p>
+          That single rule is enough to produce the behaviour this tool exists to show: positions
+          spread, cluster, and sometimes flip the whole community at once. The model is a direct
+          adaptation of the spatial prisoner's dilemma (Nowak &amp; May, 1992).
+        </p>
+      </div>
+
+      <h3>The three positions</h3>
+      <dl class="states">
+        <div class="state-def">
+          <dt>
+            <span class="swatch" style="background: var(--supporter)"></span>
+            <span>Supporter</span>
+          </dt>
+          <dd>Accepts the project and engages with the process.</dd>
+        </div>
+        <div class="state-def">
+          <dt>
+            <span class="swatch" style="background: var(--undecided)"></span>
+            <span>Undecided</span>
+          </dt>
+          <dd>Waiting, not yet committed either way.</dd>
+        </div>
+        <div class="state-def">
+          <dt>
+            <span class="swatch" style="background: var(--opposed)"></span>
+            <span>Opposed</span>
+          </dt>
+          <dd>Actively opposes the project.</dd>
+        </div>
+      </dl>
+      <div class="prose" style="margin-top: 12px">
+        <p>
+          Opposition coheres faster than support. That asymmetry is deliberate and is the
+          empirically interesting part: a grievance is shared with neighbours in a way that
+          satisfaction is not.
+        </p>
+      </div>
+
+      <h3>What to look for</h3>
+      <div class="cards">
+        <div class="card">
+          <h4>Opposition pockets</h4>
+          <p>
+            Clusters that survive even under high compensation, protected by their own internal
+            solidarity. Raising the money further does not dissolve them.
+          </p>
+        </div>
+        <div class="card">
+          <h4>Edge effects</h4>
+          <p>
+            Households on the perimeter of the footprint have fewer neighbours, so they hold
+            positions differently from those in the interior. The three figures under the grid
+            track exactly this.
+          </p>
+        </div>
+        <div class="card">
+          <h4>The tipping point</h4>
+          <p>
+            A threshold below which the community stops drifting and flips wholesale. Try the
+            <em>On the knife edge</em> scenario and nudge one lever.
+          </p>
+        </div>
+        <div class="card">
+          <h4>The backlog spiral</h4>
+          <p>
+            Unresolved grievances feed rumour, and rumour produces more grievances. Drop the
+            resolution rate and watch the loop close on itself.
+          </p>
+        </div>
+      </div>
+
+      <h3>The levers, in practice</h3>
+      <div class="prose">
+        <p>
+          The four sliders at the top of the panel are the things a project actually controls:
+          how fair and timely the <strong>compensation</strong> is perceived to be, how often and
+          how well people are <strong>consulted</strong>, what share of
+          <strong>grievances</strong> are resolved within the committed time, and how fast
+          <strong>unverified information</strong> travels. They map onto IFC Performance Standards
+          1 and 5, and onto Cernea's work on social disarticulation in resettlement.
+        </p>
+        <p>
+          The lower sliders are model settings rather than management choices:
+          <strong>weight of project management</strong> sets how far the levers above can outweigh
+          neighbourhood pressure at all, and <strong>noise</strong> covers households acting for
+          reasons the model cannot see.
+        </p>
+      </div>
+
+      <h3>Perimeter and interior</h3>
+      <div class="prose">
+        <p>
+          The grid does not wrap around into a torus. That would have been simpler to write, but
+          it would erase the edge of the affected area — and in resettlement, the edge is where
+          the difficult cases are. A household counts as being on the perimeter when it has fewer
+          than eight neighbours: because it sits on the boundary of the footprint, or because it
+          borders land the project is not taking.
+        </p>
+        <p>
+          This is why opposition is reported separately for the perimeter and the interior. A
+          single grid-wide percentage averages away the effect worth looking for.
+        </p>
+      </div>
+
+      <h3>Running it on a real project</h3>
+      <div class="prose">
+        <p>
+          The page opens on a plain rectangle with no scale and no geography, which makes it the
+          control case. Import a project outline — <strong>.kmz</strong>, <strong>.kml</strong> or
+          <strong>.geojson</strong>, the formats Google Earth and any GIS export — and the
+          simulation runs inside that polygon instead. Watch for a narrow waist, which nearly
+          separates two parts of a community so they can tip independently, and for a hole where a
+          parcel is not being acquired, which creates an interior perimeter just as volatile as
+          the outer one.
+        </p>
+        <p>
+          You choose what one cell stands for on the ground, and the grid is derived from it, so
+          two different projects stay comparable.
+        </p>
+      </div>
+
+      <div class="caveat">
+        <div class="prose">
+          <p>
+            <strong>This is not a predictor.</strong> It is a thinking tool: it shows which levers
+            produce non-linear effects and where the tipping points sit. No number it displays is
+            a forecast for any real community, and it should not be presented as one.
+          </p>
+          <p style="margin-top: 10px">
+            <strong>All data is synthetic.</strong> No real project or field data is used
+            anywhere. An imported footprint is read in your browser and never leaves it — there is
+            no upload and no server.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Built during the Vibe Coding Studio, Philomath &amp; Carnegie Mellon University.</span>
+      <a href="https://github.com/Frediscoding/Spatial-Affectability">Source</a>
+      <a
+        href="https://github.com/Frediscoding/Spatial-Affectability/blob/main/REFERENCES.md"
+        >References</a
+      >
+      <span>MIT licence.</span>
+    </footer>
 
     <div class="tooltip" id="tooltip"></div>
 
