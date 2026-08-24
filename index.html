@@ -401,6 +401,33 @@
       footer a {
         color: var(--text-secondary);
       }
+      .studio-badge {
+        flex-basis: 100%;
+        line-height: 0;
+        text-align: center;
+        margin-top: 10px;
+      }
+      .studio-badge img {
+        max-width: 100%;
+        height: auto;
+      }
+      .studio-badge .on-dark {
+        display: none;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:where(:not([data-theme='light'])) .studio-badge .on-light {
+          display: none;
+        }
+        :root:where(:not([data-theme='light'])) .studio-badge .on-dark {
+          display: inline;
+        }
+      }
+      :root[data-theme='dark'] .studio-badge .on-light {
+        display: none;
+      }
+      :root[data-theme='dark'] .studio-badge .on-dark {
+        display: inline;
+      }
 
       .tooltip {
         position: fixed;
@@ -662,6 +689,27 @@
         >References</a
       >
       <span>MIT licence.</span>
+      <a
+        class="studio-badge"
+        href="https://philomathlearning.com/studio?utm_source=member_project&amp;utm_medium=badge&amp;utm_campaign=vcs_gallery"
+        target="_blank"
+        rel="noopener"
+      >
+        <img
+          class="on-light"
+          src="./assets/vcs-light.svg"
+          alt="Built with love in the Philomath Vibe Coding Studio"
+          width="400"
+          height="38"
+        />
+        <img
+          class="on-dark"
+          src="./assets/vcs-dark.svg"
+          alt="Built with love in the Philomath Vibe Coding Studio"
+          width="400"
+          height="38"
+        />
+      </a>
     </footer>
 
     <div class="tooltip" id="tooltip"></div>
