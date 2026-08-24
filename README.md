@@ -75,6 +75,8 @@ This is the same fixed-edge rule as before, generalised. A household on the lip 
 
 `examples/synthetic-footprint.kml` is an invented outline for trying this without a GIS. It has a concavity, a narrow waist and a hole.
 
+`examples/skull-footprint.kml` is the same idea drawn as a skull, and it exercises the import harder: two disjoint polygons, several holes in one of them, and enough concavity to put 34% of the households on a perimeter, against 28% for the outline above. It reads as a face at 50 m per cell.
+
 The reader has no dependencies: a `.kmz` is a ZIP, and `DecompressionStream` is part of the platform.
 
 ---
